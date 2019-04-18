@@ -4,6 +4,8 @@
 #include "Circuit.h"
 #include "Flow.h"
 #include "Metaheuristic.h"
+#include <algorithm>
+#include <iostream>
 #include "const.h"
 
 Metaheuristic::Metaheuristic() {}
@@ -43,7 +45,7 @@ std::vector<Solution*> &Metaheuristic::quicksort(std::vector<Solution*> &solutio
 			stack.push(partitionIndex - 1);
 		}
 	}
-	
+
 	return solutions;
 }
 
@@ -80,12 +82,12 @@ void Metaheuristic::removeCapacitor(Bus *pBus) {
 }
 
 float Metaheuristic::calculateGainAdding(Circuit *pCirc, Bus *pBus) {
-	
+
 	float lossGainLight{ 0 }, lossGainMedium{ 0 }, lossGainHeavy{ 0 };
 	float lossLight{ 0 }, lossMedium{ 0 }, lossHeavy{ 0 };
 	float lossLightCap{ 0 }, lossMediumCap{ 0 }, lossHeavyCap{ 0 };
 	float gain{ 0 };
-	
+
 	Flow pFlow(pCirc, general::voltageReference, general::lossTolerance);
 
 	//Flow for light load with no capacitor
@@ -106,7 +108,7 @@ float Metaheuristic::calculateGainAdding(Circuit *pCirc, Bus *pBus) {
 	this->allocateCapacitor(pBus);
 
 	//Running flow again with capacitor added for light
-	lossLight = pFlow.loss;
+	pFlow.level = loadLevel::light;
 	pFlow.execute();
 	lossLightCap = pFlow.loss;
 
@@ -123,11 +125,57 @@ float Metaheuristic::calculateGainAdding(Circuit *pCirc, Bus *pBus) {
 	this->removeCapacitor(pBus);
 
 	//Change from W to kW
-	lossGainLight  = (lossLight - lossLightCap) / 1000;
+	lossGainLight = (lossLight - lossLightCap) / 1000;
 	lossGainMedium = (lossMedium - lossMediumCap) / 1000;
-	lossGainHeavy  = (lossHeavy - lossHeavyCap) / 1000;
+	lossGainHeavy = (lossHeavy - lossHeavyCap) / 1000;
 
 	gain = this->objectiveFunction(lossGainLight, lossGainMedium, lossGainHeavy);
+
+	return gain;
+}
+
+float Metaheuristic::calculateGain(Circuit* pCircReference, Circuit* pCirc) {
+	float lossGainLight{ 0 }, lossGainMedium{ 0 }, lossGainHeavy{ 0 };
+	float lossLight{ 0 }, lossMedium{ 0 }, lossHeavy{ 0 };
+	float lossLightRef{ 0 }, lossMediumRef{ 0 }, lossHeavyRef{ 0 };
+	float gain{ 0 };
+
+	Flow pFlow(pCirc, general::voltageReference, general::lossTolerance);
+	Flow pFlowRef(pCircReference, general::voltageReference, general::lossTolerance);
+
+	//Flow for circuit
+	pFlow.level = loadLevel::light;
+	pFlow.execute();
+	lossLight = pFlow.loss;
+
+	pFlow.level = loadLevel::medium;
+	pFlow.execute();
+	lossMedium = pFlow.loss;
+
+	pFlow.level = loadLevel::heavy;
+	pFlow.execute();
+	lossHeavy = pFlow.loss;
+
+	//Running flow for circuit reference
+	pFlowRef.level = loadLevel::light;
+	pFlowRef.execute();
+	lossLightRef = pFlowRef.loss;
+
+	pFlowRef.level = loadLevel::medium;
+	pFlowRef.execute();
+	lossMediumRef = pFlowRef.loss;
+
+	pFlowRef.level = loadLevel::heavy;
+	pFlowRef.execute();
+	lossHeavyRef = pFlowRef.loss;
+
+
+	//Change from W to kW
+	lossGainLight = (lossLightRef - lossLight) / 1000;
+	lossGainMedium = (lossMediumRef - lossMedium) / 1000;
+	lossGainHeavy = (lossHeavyRef - lossHeavy) / 1000;
+
+	gain = Metaheuristic::objectiveFunction(lossGainLight, lossGainMedium, lossGainHeavy);
 
 	return gain;
 }
@@ -159,7 +207,7 @@ float Metaheuristic::calculateGainRemoving(Circuit *pCirc, Bus *pBus) {
 	this->removeCapacitor(pBus);
 
 	//Running flow again with capacitor added for light
-	lossLight = pFlow.loss;
+	pFlow.level = loadLevel::light;
 	pFlow.execute();
 	lossLightCap = pFlow.loss;
 
@@ -183,4 +231,24 @@ float Metaheuristic::calculateGainRemoving(Circuit *pCirc, Bus *pBus) {
 	gain = this->objectiveFunction(lossGainLight, lossGainMedium, lossGainHeavy);
 
 	return gain;
+}
+
+void Metaheuristic::log(std::vector<Solution*> &solutions, Circuit* pCircReference, Circuit* pCirc) {
+	auto end = solutions.end();
+	int capNum = 0;
+	for (auto it = solutions.begin(); it != end; ++it) {
+		end = std::remove(it + 1, end, *it);
+	}
+
+	for (auto it = solutions.begin(); it != end; ++it) {
+		if((*it)->pBus->numberOfCap != 0)std::cout <<"Bus "<<(*it)->pBus->code<<": "<<(*it)->pBus->numberOfCap<<" capacitor(s)"<<std::endl;
+		capNum += (*it)->pBus->numberOfCap;
+	}
+	std::cout << std::endl;
+	std::cout << capNum << " capacitors allocated " << std::endl;
+
+	std::cout << std::endl;
+	std::cout << "Gain of " << Metaheuristic::calculateGain(pCircReference, pCirc) << " dollars" << std::endl;
+
+	std::cout << std::endl;
 }

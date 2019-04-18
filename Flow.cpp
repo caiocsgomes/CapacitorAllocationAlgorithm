@@ -73,7 +73,6 @@ void Flow::calculateVoltageBus() {
 void Flow::execute() {
 	this->startVoltages();
 	numberOfIterations = 0;
-	this->level = 1;////////////////TIRAR
 	do {
 		this->refreshLosses();
 		this->calculateCurrentBus();
@@ -81,9 +80,7 @@ void Flow::execute() {
 		this->calculateVoltageBus();
 		this->calculatePowerLoss();
 		numberOfIterations++;
-		if (numberOfIterations > 300) {
-			int a = 10;
-		}
-	} while (this->calculateLossDifference() > this->tolerance);
+	} while (this->calculateLossDifference() > this->tolerance && numberOfIterations < 300);
+	if (numberOfIterations >= 300) throw std::string("Convergence problem in flow");
 	this->loss = this->newLosses;
 }
