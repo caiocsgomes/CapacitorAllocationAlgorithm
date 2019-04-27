@@ -14,7 +14,13 @@ Metaheuristic::~Metaheuristic() {}
 
 //This function will calculate the gain in dollars with the capacitor of 300kVAr installation in the bus
 float Metaheuristic::objectiveFunction(float lossGainLight, float lossGainMedium, float lossGainHeavy) {
-	float profit = energy::pricekWh * (lossGainLight * general::lightLoadHours + lossGainMedium * general::mediumLoadHours + lossGainHeavy * general::heavyLoadHours) - (capacitor::price300kVAr + capacitor::price300kVArInstalation);
+	float profit = energy::pricekWh * ((lossGainLight * general::lightLoadHours) + (lossGainMedium * general::mediumLoadHours) + (lossGainHeavy * general::heavyLoadHours)) -  (capacitor::price300kVAr + capacitor::price300kVArInstalation);
+	return profit;
+}
+
+//This function will calculate the gain in dollars with all the capacitors in the grid
+float Metaheuristic::objectiveFunctionFinal(float lossGainLight, float lossGainMedium, float lossGainHeavy, std::vector<Solution*> &solutions) {
+	float profit = energy::pricekWh * ((lossGainLight * general::lightLoadHours) + (lossGainMedium * general::mediumLoadHours) + (lossGainHeavy * general::heavyLoadHours)) - ((numberOfCap(solutions)) * (capacitor::price300kVAr + capacitor::price300kVArInstalation));
 	return profit;
 }
 
@@ -134,7 +140,7 @@ float Metaheuristic::calculateGainAdding(Circuit *pCirc, Bus *pBus) {
 	return gain;
 }
 
-float Metaheuristic::calculateGain(Circuit* pCircReference, Circuit* pCirc) {
+float Metaheuristic::calculateGainFinal(Circuit* pCircReference, Circuit* pCirc, std::vector<Solution*> &solutions) {
 	float lossGainLight{ 0 }, lossGainMedium{ 0 }, lossGainHeavy{ 0 };
 	float lossLight{ 0 }, lossMedium{ 0 }, lossHeavy{ 0 };
 	float lossLightRef{ 0 }, lossMediumRef{ 0 }, lossHeavyRef{ 0 };
@@ -175,7 +181,7 @@ float Metaheuristic::calculateGain(Circuit* pCircReference, Circuit* pCirc) {
 	lossGainMedium = (lossMediumRef - lossMedium) / 1000;
 	lossGainHeavy = (lossHeavyRef - lossHeavy) / 1000;
 
-	gain = Metaheuristic::objectiveFunction(lossGainLight, lossGainMedium, lossGainHeavy);
+	gain = Metaheuristic::objectiveFunctionFinal(lossGainLight, lossGainMedium, lossGainHeavy, solutions);
 
 	return gain;
 }
@@ -233,6 +239,86 @@ float Metaheuristic::calculateGainRemoving(Circuit *pCirc, Bus *pBus) {
 	return gain;
 }
 
+float Metaheuristic::calculateLosskW(Circuit *pCirc, int level) {
+
+	float loss{ 0 };
+
+	Flow pFlow(pCirc, general::voltageReference, general::lossTolerance);
+
+	switch (level) {
+		case 0:
+			//Flow for medium load with no capacitor
+			pFlow.level = loadLevel::light;
+			pFlow.execute();
+			loss = pFlow.loss;
+
+			//Change from W to kW
+			loss = loss / 1000;
+			break;
+		case 1:
+			//Flow for medium load with no capacitor
+			pFlow.level = loadLevel::medium;
+			pFlow.execute();
+			loss = pFlow.loss;
+
+			//Change from W to kW
+			loss = loss / 1000;
+			break;
+		case 2:
+			//Flow for medium load with no capacitor
+			pFlow.level = loadLevel::heavy;
+			pFlow.execute();
+			loss = pFlow.loss;
+
+			//Change from W to kW
+			loss = loss / 1000;
+			break;
+		default:
+			break;
+	}
+	
+	return loss;
+}
+
+float Metaheuristic::calculateLosskWh(Circuit *pCirc) {
+
+	float lossLight{ 0 }, lossMedium{ 0 }, lossHeavy{ 0 };
+	float loss{ 0 };
+
+	Flow pFlow(pCirc, general::voltageReference, general::lossTolerance);
+
+	//Flow for light load with no capacitor
+	pFlow.level = loadLevel::light;
+	pFlow.execute();
+	lossLight = pFlow.loss;
+
+	//Flow for medium load with no capacitor
+	pFlow.level = loadLevel::medium;
+	pFlow.execute();
+	lossMedium = pFlow.loss;
+
+	//Flow for light load with no capacitor
+	pFlow.level = loadLevel::heavy;
+	pFlow.execute();
+	lossHeavy = pFlow.loss;
+
+	//Change from W to kW
+	lossLight = lossLight / 1000;
+	lossMedium = lossMedium / 1000;
+	lossHeavy = lossHeavy/ 1000;
+	
+	loss = (lossLight * general::lightLoadHours) + (lossMedium * general::mediumLoadHours) + (lossHeavy * general::heavyLoadHours);
+
+	return loss;
+}
+int Metaheuristic::numberOfCap(std::vector<Solution*> &solutions) {
+	auto end = solutions.end();
+	int capNum = 0;
+	for (auto it = solutions.begin(); it != end; ++it) {
+		capNum += (*it)->pBus->numberOfCap;
+	}
+	return capNum;
+}
 void Metaheuristic::log(std::vector<Solution*> &solutions, Circuit* pCircReference, Circuit* pCirc) {
 	auto end = solutions.end();
 	int capNum = 0;
@@ -241,14 +327,29 @@ void Metaheuristic::log(std::vector<Solution*> &solutions, Circuit* pCircReferen
 	}
 
 	for (auto it = solutions.begin(); it != end; ++it) {
-		if((*it)->pBus->numberOfCap != 0)std::cout <<"Bus "<<(*it)->pBus->code<<": "<<(*it)->pBus->numberOfCap<<" capacitor(s)"<<std::endl;
+		if((*it)->pBus->numberOfCap != 0)std::cout <<"Barra "<<(*it)->pBus->code<<": "<<(*it)->pBus->numberOfCap<<" capacitores"<<std::endl;
 		capNum += (*it)->pBus->numberOfCap;
 	}
 	std::cout << std::endl;
-	std::cout << capNum << " capacitors allocated " << std::endl;
+	std::cout << capNum << " capacitores alocados " << std::endl;
 
+	std::cout << "Perdas antes em kW para o patamar leve de carga: " << Metaheuristic::calculateLosskW(pCircReference, 0) << " kW" << std::endl;
+	std::cout << "Perdas depois em kW para o patamar leve de carga: " << Metaheuristic::calculateLosskW(pCirc, 0) << " kW" << std::endl;
 	std::cout << std::endl;
-	std::cout << "Gain of " << Metaheuristic::calculateGain(pCircReference, pCirc) << " dollars" << std::endl;
 
+	std::cout << "Perdas antes em kW para o patamar medio de carga: " << Metaheuristic::calculateLosskW(pCircReference, 1) << " kW" << std::endl;
+	std::cout << "Perdas depois em kW para o patamar medio de carga: " << Metaheuristic::calculateLosskW(pCirc, 1) << " kW" << std::endl;
+	std::cout << std::endl;
+
+	std::cout << "Perdas antes em kW para o patamar pesado de carga: " << Metaheuristic::calculateLosskW(pCircReference, 2) << " kW" << std::endl;
+	std::cout << "Perdas depois em kW para o patamar pesado de carga: " << Metaheuristic::calculateLosskW(pCirc, 2) << " kW" << std::endl;
+	std::cout << std::endl;
+
+	std::cout <<"Perdas antes em kWh para um ano: " << Metaheuristic::calculateLosskWh(pCircReference) <<" kWh" << std::endl;
+	std::cout <<"Perdas depois em kWh para um ano: " << Metaheuristic::calculateLosskWh(pCirc) << " kWh" << std::endl;
+	std::cout << std::endl;
+
+	
+	std::cout << "Ganho de " << Metaheuristic::calculateGainFinal(pCircReference, pCirc, solutions) << " dolares" << std::endl;
 	std::cout << std::endl;
 }
