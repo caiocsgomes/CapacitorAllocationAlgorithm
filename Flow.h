@@ -11,6 +11,7 @@ public:
 	Circuit* pCirc;
 	float tolerance, loss, level;
 	void  execute(void);
+	static int numFlow;
 private:
 	std::complex<float> voltageReference;
 	float oldLosses, newLosses, imaginaryLoss, realLoss;

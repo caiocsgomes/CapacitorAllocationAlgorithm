@@ -4,6 +4,7 @@
 #include "Bus.h"
 #include "Branch.h"
 #include "Circuit.h"
+int Flow::numFlow = 0;
 
 Flow::Flow(Circuit* circ, std::complex<float> voltage, float referenceTolerance)
 	: pCirc(circ), tolerance(referenceTolerance), loss(0), level(1), voltageReference(voltage),
@@ -83,4 +84,5 @@ void Flow::execute() {
 	} while (this->calculateLossDifference() > this->tolerance && numberOfIterations < 300);
 	if (numberOfIterations >= 300) throw std::string("Convergence problem in flow");
 	this->loss = this->newLosses;
+	Flow::numFlow++;
 }
