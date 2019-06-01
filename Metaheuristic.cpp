@@ -20,7 +20,8 @@ float Metaheuristic::objectiveFunction(float lossGainLight, float lossGainMedium
 
 //This function will calculate the gain in dollars with all the capacitors in the grid
 float Metaheuristic::objectiveFunctionFinal(float lossGainLight, float lossGainMedium, float lossGainHeavy, std::vector<Solution*> &solutions) {
-	float profit = energy::pricekWh * ((lossGainLight * general::lightLoadHours) + (lossGainMedium * general::mediumLoadHours) + (lossGainHeavy * general::heavyLoadHours)) - ((numberOfCap(solutions)) * (capacitor::price300kVAr + capacitor::price300kVArInstalation));
+	int numCap = 0;
+	float profit = energy::pricekWh * ((lossGainLight * general::lightLoadHours) + (lossGainMedium * general::mediumLoadHours) + (lossGainHeavy * general::heavyLoadHours)) - (solutions.size() * (capacitor::price300kVArInstalation + capacitor::price300kVAr));
 	return profit;
 }
 
@@ -325,8 +326,8 @@ void Metaheuristic::log(std::vector<Solution*> &solutions, Circuit* pCircReferen
 	for (auto it = solutions.begin(); it != end; ++it) {
 		end = std::remove(it + 1, end, *it);
 	}
-
-	for (auto it = solutions.begin(); it != end; ++it) {
+	end = end - 2;
+	for (auto it = solutions.begin(); it != end; it++) {
 		if((*it)->pBus->numberOfCap != 0)std::cout <<"Barra "<<(*it)->pBus->code<<": "<<(*it)->pBus->numberOfCap<<" capacitores"<<std::endl;
 		capNum += (*it)->pBus->numberOfCap;
 	}
